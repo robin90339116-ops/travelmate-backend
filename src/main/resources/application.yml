@@ -1,0 +1,68 @@
+server:
+  port: 8787
+
+spring:
+  application:
+    name: travelmate-backend
+
+  # 默认 dev:内存 H2,零外部依赖即可启动。
+  datasource:
+    url: jdbc:h2:mem:travelmate;DB_CLOSE_DELAY=-1;MODE=MySQL
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: false
+
+  # dev 用本地 ConcurrentMap 缓存;prod/redis profile 切换为 Redis(见 RedisCacheConfig)。
+  cache:
+    type: simple
+
+  # RabbitMQ 仅 mq profile 使用;默认不启动消费者。
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USER:guest}
+    password: ${RABBITMQ_PASSWORD:guest}
+    listener:
+      simple:
+        auto-startup: false
+
+  # Redis 仅 redis/prod profile 实际使用。
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+
+app:
+  jwt:
+    secret: ${JWT_SECRET:travelmate-dev-secret-change-me-please-32bytes}
+    access-ttl-seconds: 7200
+    refresh-ttl-seconds: 2592000
+  sms:
+    dev-code: ${SMS_DEV_CODE:246810}
+  ai:
+    provider: ${AI_PROVIDER:bailian}
+    api-key: ${DASHSCOPE_API_KEY:}
+    base-url: ${AI_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode/v1}
+    text-model: ${AI_TEXT_MODEL:qwen-plus}
+    vision-model: ${AI_VISION_MODEL:qwen-vl-plus}
+  map:
+    amap-web-key: ${AMAP_WEB_KEY:}
+  async:
+    mode: ${ASYNC_MODE:local}   # local | rabbit
+  realtime:
+    redis: false                # true 时经 Redis Pub/Sub 跨实例广播
+
+logging:
+  level:
+    com.travelmate: INFO
