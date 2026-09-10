@@ -26,4 +26,9 @@ public final class CurrentUser {
         }
         return null;
     }
+
+    public static String sessionId() {
+        id();
+        return (String) SecurityContextHolder.getContext().getAuthentication().getDetails();
+    }
 }

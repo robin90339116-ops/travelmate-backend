@@ -14,6 +14,15 @@ public class AuthController {
 
     private final AuthService authService;
 
+    @PostMapping("/register")
+    public Result<TokenResponse> register(@Valid @RequestBody PasswordRequest request) {
+        return Result.ok(authService.register(request));
+    }
+    @PostMapping("/password/login")
+    public Result<TokenResponse> passwordLogin(@Valid @RequestBody PasswordRequest request) {
+        return Result.ok(authService.passwordLogin(request));
+    }
+
     @PostMapping("/sms/code")
     public Result<SmsCodeResponse> smsCode(@Valid @RequestBody SmsCodeRequest request) {
         return Result.ok(authService.requestSmsCode(request));
@@ -43,7 +52,7 @@ public class AuthController {
 
     @GetMapping("/sessions")
     public Result<SessionListResponse> sessions() {
-        return Result.ok(authService.listSessions(CurrentUser.id(), null));
+        return Result.ok(authService.listSessions(CurrentUser.id(), CurrentUser.sessionId()));
     }
 
     @DeleteMapping("/sessions/{sessionId}")

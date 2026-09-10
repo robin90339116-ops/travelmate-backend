@@ -1,0 +1,38 @@
+[
+  {
+    "test": "MySQL production startup",
+    "pass": true
+  },
+  {
+    "test": "production development-code login disabled",
+    "pass": true
+  },
+  {
+    "test": "Redis repeated cache read /api/catalog/cities",
+    "pass": true
+  },
+  {
+    "test": "Redis repeated cache read /api/catalog/routes/route-beijing-axis",
+    "pass": true
+  },
+  {
+    "test": "shared MySQL session on second instance",
+    "pass": true
+  },
+  {
+    "test": "RabbitMQ consumption and cross-instance job result",
+    "pass": true
+  },
+  {
+    "test": "Redis cross-instance team broadcast",
+    "pass": true
+  },
+  {
+    "test": "MQ failed job has persistent terminal state",
+    "pass": true
+  },
+  {
+    "test": "failed AI message routed to dead-letter queue",
+    "pass": true
+  }
+]

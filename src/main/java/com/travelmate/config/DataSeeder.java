@@ -27,6 +27,7 @@ public class DataSeeder implements CommandLineRunner {
     private final RoutePointRepository routePointRepository;
 
     @Override
+    @org.springframework.transaction.annotation.Transactional
     public void run(String... args) {
         if (cityRepository.count() > 0) {
             return;
@@ -84,8 +85,8 @@ public class DataSeeder implements CommandLineRunner {
         s.setOpenTime(openTime);
         s.setRecommendedDuration(duration);
         s.setTags(tags);
-        s.setSourceName(sourceName);
-        s.setSourceStatus(status);
+        s.setSourceName("内置演示资料（未经外部核验）");
+        s.setSourceStatus("pending");
         s.setLatitude(lat);
         s.setLongitude(lng);
         return spotRepository.save(s).getId();

@@ -1,0 +1,188 @@
+[
+  {
+    "test": "health",
+    "pass": true,
+    "expected": 200,
+    "actual": 200
+  },
+  {
+    "test": "three cities",
+    "pass": true,
+    "expected": 3,
+    "actual": 3
+  },
+  {
+    "test": "three cities after startup settles",
+    "pass": true,
+    "expected": 3,
+    "actual": 3
+  },
+  {
+    "test": "route detail",
+    "pass": true,
+    "expected": 200,
+    "actual": 200
+  },
+  {
+    "test": "missing route",
+    "pass": true,
+    "expected": 404,
+    "actual": 404
+  },
+  {
+    "test": "anonymous favorites",
+    "pass": true,
+    "expected": 401,
+    "actual": 401
+  },
+  {
+    "test": "bad login code",
+    "pass": true,
+    "expected": 400,
+    "actual": 400
+  },
+  {
+    "test": "sessions current marker",
+    "pass": true,
+    "expected": true,
+    "actual": true
+  },
+  {
+    "test": "refresh rotation",
+    "pass": true,
+    "expected": 200,
+    "actual": 200
+  },
+  {
+    "test": "old refresh replay rejected",
+    "pass": true,
+    "expected": 401,
+    "actual": 401
+  },
+  {
+    "test": "create favorite",
+    "pass": true,
+    "expected": 200,
+    "actual": 200
+  },
+  {
+    "test": "favorite isolation",
+    "pass": true,
+    "expected": 0,
+    "actual": 0
+  },
+  {
+    "test": "foreign favorite delete",
+    "pass": true,
+    "expected": 404,
+    "actual": 404
+  },
+  {
+    "test": "empty favorite rejected",
+    "pass": true,
+    "expected": 400,
+    "actual": 400
+  },
+  {
+    "test": "outsider room read rejected",
+    "pass": true,
+    "expected": 403,
+    "actual": 403
+  },
+  {
+    "test": "join team",
+    "pass": true,
+    "expected": 200,
+    "actual": 200
+  },
+  {
+    "test": "non-owner kick rejected",
+    "pass": true,
+    "expected": 403,
+    "actual": 403
+  },
+  {
+    "test": "outsider playback rejected",
+    "pass": true,
+    "expected": 403,
+    "actual": 403
+  },
+  {
+    "test": "invalid playback rejected",
+    "pass": true,
+    "expected": 400,
+    "actual": 400
+  },
+  {
+    "test": "anonymous websocket impersonation blocked",
+    "pass": true,
+    "expected": false,
+    "actual": false
+  },
+  {
+    "test": "authenticated websocket receives broadcast",
+    "pass": true,
+    "expected": true,
+    "actual": true
+  },
+  {
+    "test": "transfer owner",
+    "pass": true,
+    "expected": 200,
+    "actual": 200
+  },
+  {
+    "test": "owner leave preserves valid ownership",
+    "pass": true,
+    "expected": true,
+    "actual": true
+  },
+  {
+    "test": "AI missing credential",
+    "pass": true,
+    "expected": 503,
+    "actual": 503
+  },
+  {
+    "test": "vision missing media",
+    "pass": true,
+    "expected": 400,
+    "actual": 400
+  },
+  {
+    "test": "map missing credential",
+    "pass": true,
+    "expected": 503,
+    "actual": 503
+  },
+  {
+    "test": "map blank keyword",
+    "pass": true,
+    "expected": 400,
+    "actual": 400
+  },
+  {
+    "test": "failed async job returns terminal event on later subscription",
+    "pass": true,
+    "expected": true,
+    "actual": true
+  },
+  {
+    "test": "logout all",
+    "pass": true,
+    "expected": 200,
+    "actual": 200
+  },
+  {
+    "test": "revoked access rejected",
+    "pass": true,
+    "expected": 401,
+    "actual": 401
+  },
+  {
+    "test": "revoked refresh rejected",
+    "pass": true,
+    "expected": 401,
+    "actual": 401
+  }
+]

@@ -21,8 +21,9 @@ public class QwenClient {
     private final String textModel;
     private final String visionModel;
     private final String provider;
-    private final RestClient restClient = RestClient.create();
+    private final RestClient restClient;
 
+    @org.springframework.beans.factory.annotation.Autowired
     public QwenClient(
             @Value("${app.ai.api-key:}") String apiKey,
             @Value("${app.ai.base-url:https://dashscope.aliyuncs.com/compatible-mode/v1}") String baseUrl,
@@ -34,10 +35,18 @@ public class QwenClient {
         this.textModel = textModel;
         this.visionModel = visionModel;
         this.provider = provider;
+        var factory = new org.springframework.http.client.SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(5000);
+        factory.setReadTimeout(30000);
+        this.restClient = RestClient.builder().requestFactory(factory).build();
     }
 
     public boolean configured() {
         return apiKey != null && !apiKey.isBlank();
+    }
+
+    QwenClient(String apiKey,String baseUrl,String textModel,String visionModel,String provider,RestClient client) {
+        this.apiKey=apiKey;this.baseUrl=baseUrl;this.textModel=textModel;this.visionModel=visionModel;this.provider=provider;this.restClient=client;
     }
 
     public String provider() {
@@ -60,15 +69,10 @@ public class QwenClient {
         Map<String, Object> body = Map.of(
                 "model", model,
                 "messages", messages,
-                "temperature", 0.4);
+                "temperature", 0.4,
+                "max_tokens", 1024);
         try {
-            Map<String, Object> response = restClient.post()
-                    .uri(baseUrl.replaceAll("/+$", "") + "/chat/completions")
-                    .header("Authorization", "Bearer " + apiKey)
-                    .header("Content-Type", "application/json")
-                    .body(body)
-                    .retrieve()
-                    .body(Map.class);
+            Map<String, Object> response = request(body);
             if (response == null) {
                 throw ApiException.serviceUnavailable("AI Provider 返回为空");
             }
@@ -85,8 +89,29 @@ public class QwenClient {
         } catch (ApiException e) {
             throw e;
         } catch (Exception e) {
-            log.error("调用 AI Provider 失败", e);
-            throw ApiException.serviceUnavailable("调用 AI Provider 失败:" + e.getMessage());
+            Throwable root=e;
+            while(root.getCause()!=null&&root.getCause()!=root)root=root.getCause();
+            log.warn("调用 AI Provider 失败: {}, cause={}", e.getClass().getSimpleName(), root.getClass().getSimpleName());
+            throw ApiException.serviceUnavailable("AI服务暂时不可用，请稍后重试");
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String,Object> request(Map<String,Object> body) {
+        for(int attempt=0;attempt<3;attempt++) {
+            try { return restClient.post()
+                    .uri(baseUrl.replaceAll("/+$", "") + "/chat/completions")
+                    .header("Authorization", "Bearer " + apiKey)
+                    .header("Content-Type", "application/json")
+                    .body(body)
+                    .retrieve()
+                    .body(Map.class);
+            } catch(org.springframework.web.client.RestClientResponseException e) {
+                if(attempt==2 || !(e.getStatusCode().value()==429 || e.getStatusCode().is5xxServerError()))throw e;
+                try { Thread.sleep(200L << attempt); }
+                catch(InterruptedException interrupted){Thread.currentThread().interrupt();throw ApiException.serviceUnavailable("请求已中断");}
+            }
+        }
+        throw ApiException.serviceUnavailable("AI服务重试失败");
     }
 }

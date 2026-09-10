@@ -24,7 +24,7 @@ import java.io.IOException;
 @RequiredArgsConstructor
 public class JwtAuthFilter extends OncePerRequestFilter {
 
-    private final JwtUtil jwtUtil;
+    private final com.travelmate.auth.SessionAuthenticator sessions;
 
     @Override
     protected void doFilterInternal(@NonNull HttpServletRequest request,
@@ -34,14 +34,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         if (header != null && header.startsWith("Bearer ")) {
             String token = header.substring(7);
             try {
-                Claims claims = jwtUtil.parse(token);
-                if ("access".equals(claims.get("type", String.class))) {
-                    Long userId = Long.valueOf(claims.getSubject());
-                    var auth = new UsernamePasswordAuthenticationToken(
-                            userId, null, AuthorityUtils.createAuthorityList("ROLE_USER"));
-                    auth.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-                    SecurityContextHolder.getContext().setAuthentication(auth);
-                }
+                SecurityContextHolder.getContext().setAuthentication(sessions.authenticate(token));
             } catch (Exception ignored) {
                 // 令牌无效时保持匿名,由安全配置决定是否拒绝。
             }

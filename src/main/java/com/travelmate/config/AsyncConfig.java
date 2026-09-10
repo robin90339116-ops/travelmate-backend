@@ -19,7 +19,6 @@ public class AsyncConfig {
         executor.setMaxPoolSize(16);
         executor.setQueueCapacity(200);
         executor.setThreadNamePrefix("guide-async-");
-        executor.initialize();
         return executor;
     }
 }

@@ -28,4 +28,16 @@ public class GlobalExceptionHandler {
         log.error("未处理异常", ex);
         return ResponseEntity.internalServerError().body(Result.error(50000, "服务器内部错误"));
     }
+
+    @ExceptionHandler({org.springframework.http.converter.HttpMessageNotReadableException.class,
+            org.springframework.web.method.annotation.MethodArgumentTypeMismatchException.class})
+    public ResponseEntity<Result<Void>> malformed(Exception ex) {
+        return ResponseEntity.badRequest().body(Result.error(40000, "请求格式错误"));
+    }
+
+    @ExceptionHandler({org.springframework.dao.DataIntegrityViolationException.class,
+            org.springframework.dao.OptimisticLockingFailureException.class})
+    public ResponseEntity<Result<Void>> conflict(Exception ex) {
+        return ResponseEntity.status(409).body(Result.error(40900, "数据已变化或存在重复，请刷新后重试"));
+    }
 }

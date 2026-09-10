@@ -4,7 +4,6 @@ target/
 *.log
 *.jar
 !.mvn/wrapper/*.jar
-
 .idea/
 *.iml
 *.ipr
@@ -13,9 +12,10 @@ target/
 .settings/
 .project
 .classpath
-
 .DS_Store
 .env
 .env.local
-
 HELP.md
+data/
+results.json
+infra-results.json

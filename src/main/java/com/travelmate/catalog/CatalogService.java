@@ -17,9 +17,8 @@ import java.util.Arrays;
 import java.util.List;
 
 /**
- * 目录读服务。热点读全部走缓存:
- * - sync = true:防缓存击穿(并发只放一个线程回源)。
- * - 缓存空值 + 随机 TTL(见 RedisConfig):防穿透与雪崩。
+ * 目录读缓存；sync行为取决于缓存实现，不能视为跨实例分布式锁。
+ * 城市空结果不缓存，避免种子初始化期间污染缓存。
  */
 @Service
 @RequiredArgsConstructor
@@ -30,7 +29,7 @@ public class CatalogService {
     private final RouteRepository routeRepository;
     private final RoutePointRepository routePointRepository;
 
-    @Cacheable(value = "cities", key = "'all'", sync = true)
+    @Cacheable(value = "cities", key = "'all'", unless = "#result.isEmpty()")
     public List<CityView> listCities() {
         return cityRepository.findAll().stream()
                 .map(c -> new CityView(c.getCityKey(), c.getName(), c.getSummary()))

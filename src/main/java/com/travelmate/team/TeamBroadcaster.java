@@ -38,6 +38,15 @@ public class TeamBroadcaster {
     }
 
     public void broadcast(Long teamId, String type, Object data) {
+        if (org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive()) {
+            org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
+                    new org.springframework.transaction.support.TransactionSynchronization() {
+                        @Override public void afterCommit() { publish(teamId,type,data); }
+                    });
+        } else publish(teamId,type,data);
+    }
+
+    private void publish(Long teamId,String type,Object data) {
         Map<String, Object> event = Map.of("type", type, "data", data);
         if (redisEnabled) {
             StringRedisTemplate redis = redisTemplateProvider.getIfAvailable();

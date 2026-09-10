@@ -30,13 +30,29 @@ public class AuthService {
     @Value("${app.sms.dev-code:246810}")
     private String devCode;
 
+    @Value("${app.sms.dev-enabled:true}")
+    private boolean devEnabled;
+
+    private void requireDevLogin() {
+        if (!devEnabled) throw ApiException.serviceUnavailable("短信服务尚未配置，开发验证码登录已禁用");
+    }
+
+    static String digest(String token) {
+        try {
+            return java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256")
+                    .digest(token.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        } catch (java.security.NoSuchAlgorithmException e) { throw new IllegalStateException(e); }
+    }
+
     public SmsCodeResponse requestSmsCode(SmsCodeRequest request) {
+        requireDevLogin();
         // 生产环境应调用阿里云 SMS OpenAPI 下发随机验证码;开发态返回固定 devCode。
         return new SmsCodeResponse(request.phone(), devCode, "开发环境验证码,生产将通过短信下发");
     }
 
     @Transactional
     public TokenResponse login(LoginRequest request) {
+        requireDevLogin();
         if (!devCode.equals(request.code())) {
             throw ApiException.badRequest("验证码错误");
         }
@@ -47,17 +63,38 @@ public class AuthService {
             return userRepository.save(created);
         });
 
+        return createSession(user, request.deviceName());
+    }
+
+    @Transactional
+    public TokenResponse register(PasswordRequest request) {
+        if (userRepository.findByPhone(request.phone()).isPresent())
+            throw ApiException.badRequest("该账号无法注册");
+        User user=new User();user.setPhone(request.phone());user.setDisplayName("旅行者");
+        user.setPasswordHash(passwordEncoder.encode(digest(request.password())));
+        return createSession(userRepository.save(user),request.deviceName());
+    }
+
+    @Transactional
+    public TokenResponse passwordLogin(PasswordRequest request) {
+        User user=userRepository.findByPhone(request.phone()).orElseThrow(()->ApiException.unauthorized("账号或密码错误"));
+        if(user.getPasswordHash()==null || !passwordEncoder.matches(digest(request.password()),user.getPasswordHash()))
+            throw ApiException.unauthorized("账号或密码错误");
+        return createSession(user,request.deviceName());
+    }
+
+    private TokenResponse createSession(User user,String deviceName) {
         String sessionId = UUID.randomUUID().toString();
         String refreshToken = jwtUtil.issueRefreshToken(user.getId(), user.getPhone(), sessionId);
 
         DeviceSession session = new DeviceSession();
         session.setSessionId(sessionId);
         session.setUserId(user.getId());
-        session.setDeviceName(request.deviceName() == null ? "未知设备" : request.deviceName());
-        session.setRefreshTokenHash(passwordEncoder.encode(refreshToken));
+        session.setDeviceName(deviceName == null ? "未知设备" : deviceName);
+        session.setRefreshTokenHash(digest(refreshToken));
         sessionRepository.save(session);
 
-        String accessToken = jwtUtil.issueAccessToken(user.getId(), user.getPhone());
+        String accessToken = jwtUtil.issueAccessToken(user.getId(), user.getPhone(), sessionId);
         return new TokenResponse(accessToken, refreshToken, jwtUtil.getAccessTtlSeconds(), sessionId, toView(user));
     }
 
@@ -67,10 +104,11 @@ public class AuthService {
         String sessionId = claims.get("sid", String.class);
         Long userId = Long.valueOf(claims.getSubject());
 
-        DeviceSession session = sessionRepository.findBySessionId(sessionId)
+        DeviceSession session = sessionRepository.lockBySessionId(sessionId)
                 .orElseThrow(() -> ApiException.unauthorized("会话不存在或已失效"));
         if (!session.isActive() || session.getRefreshTokenHash() == null
-                || !passwordEncoder.matches(request.refreshToken(), session.getRefreshTokenHash())) {
+                || !java.security.MessageDigest.isEqual(digest(request.refreshToken()).getBytes(java.nio.charset.StandardCharsets.US_ASCII),
+                    session.getRefreshTokenHash().getBytes(java.nio.charset.StandardCharsets.US_ASCII))) {
             throw ApiException.unauthorized("refresh token 已失效,请重新登录");
         }
 
@@ -79,24 +117,23 @@ public class AuthService {
 
         // 轮换:签发新 refresh 并更新哈希,旧 refresh 立即失效。
         String newRefresh = jwtUtil.issueRefreshToken(userId, user.getPhone(), sessionId);
-        session.setRefreshTokenHash(passwordEncoder.encode(newRefresh));
+        session.setRefreshTokenHash(digest(newRefresh));
         session.setLastActiveAt(Instant.now());
         sessionRepository.save(session);
 
-        String accessToken = jwtUtil.issueAccessToken(userId, user.getPhone());
+        String accessToken = jwtUtil.issueAccessToken(userId, user.getPhone(), sessionId);
         return new TokenResponse(accessToken, newRefresh, jwtUtil.getAccessTtlSeconds(), sessionId, toView(user));
     }
 
     @Transactional
     public void logout(Long userId, LogoutRequest request) {
+        if (request == null || request.refreshToken() == null || request.refreshToken().isBlank()) {
+            revokeSession(userId, com.travelmate.common.CurrentUser.sessionId());
+            return;
+        }
         if (request != null && request.refreshToken() != null && !request.refreshToken().isBlank()) {
-            try {
-                Claims claims = parseRefresh(request.refreshToken());
-                revokeSession(userId, claims.get("sid", String.class));
-                return;
-            } catch (Exception ignored) {
-                // 落到全端登出以下的兜底不需要,静默即可。
-            }
+            Claims claims = parseRefresh(request.refreshToken());
+            revokeSession(userId, claims.get("sid", String.class));
         }
     }
 

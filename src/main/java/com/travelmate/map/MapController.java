@@ -24,7 +24,37 @@ public class MapController {
     @Value("${app.map.amap-web-key:}")
     private String amapKey;
 
-    private final RestClient restClient = RestClient.create();
+    private final RestClient restClient = mapClient();
+    private static RestClient mapClient() {
+        var factory=new org.springframework.http.client.SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(5000);factory.setReadTimeout(10000);
+        return RestClient.builder().requestFactory(factory).build();
+    }
+
+    public record WalkingRequest(@jakarta.validation.constraints.NotBlank String origin,
+            @jakarta.validation.constraints.NotBlank String destination) {}
+
+    @PostMapping("/route-validate")
+    public Result<?> walking(@jakarta.validation.Valid @RequestBody WalkingRequest request) {
+        validateCoordinate(request.origin());validateCoordinate(request.destination());
+        if(amapKey.isBlank())throw ApiException.serviceUnavailable("高德服务未配置");
+        var uri=java.net.URI.create("https://restapi.amap.com/v5/direction/walking?key="+enc(amapKey)
+                +"&origin="+enc(request.origin())+"&destination="+enc(request.destination()));
+        try {
+            Map<?,?> data=restClient.get().uri(uri).retrieve().body(Map.class);
+            if(data==null||!"1".equals(data.get("status")))throw ApiException.serviceUnavailable("高德路线查询失败");
+            return Result.ok(data);
+        } catch (org.springframework.web.client.RestClientException e) {
+            throw ApiException.serviceUnavailable("高德服务暂时不可用");
+        }
+    }
+    private void validateCoordinate(String coordinate) {
+        try {
+            String[] parts=coordinate.split(",");if(parts.length!=2)throw new IllegalArgumentException();
+            double lng=Double.parseDouble(parts[0]),lat=Double.parseDouble(parts[1]);
+            if(!Double.isFinite(lng)||!Double.isFinite(lat)||Math.abs(lng)>180||Math.abs(lat)>90)throw new IllegalArgumentException();
+        } catch(Exception e){throw ApiException.badRequest("坐标必须为有效的经度,纬度");}
+    }
 
     public record SearchRequest(String keyword, String city) {
     }
@@ -52,7 +82,9 @@ public class MapController {
         if (request.city() != null && !request.city().isBlank()) {
             uri.append("&region=").append(enc(request.city())).append("&city_limit=true");
         }
-        Map<String, Object> data = restClient.get().uri(uri.toString()).retrieve().body(Map.class);
+        Map<String, Object> data;
+        try { data = restClient.get().uri(java.net.URI.create(uri.toString())).retrieve().body(Map.class); }
+        catch (org.springframework.web.client.RestClientException e) { throw ApiException.serviceUnavailable("高德服务暂时不可用"); }
         if (data == null || !"1".equals(String.valueOf(data.get("status")))) {
             throw ApiException.serviceUnavailable("高德地点搜索失败:" + (data == null ? "空响应" : data.get("info")));
         }

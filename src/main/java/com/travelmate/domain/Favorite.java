@@ -9,7 +9,7 @@ import java.time.Instant;
 @Getter
 @Setter
 @Entity
-@Table(name = "favorite", indexes = @Index(name = "idx_favorite_user", columnList = "userId"))
+@Table(name = "favorite", indexes = @Index(name = "idx_favorite_user", columnList = "userId"), uniqueConstraints = @UniqueConstraint(name="uk_favorite_target",columnNames={"userId","targetType","targetId"}))
 public class Favorite {
 
     @Id
@@ -21,6 +21,9 @@ public class Favorite {
 
     @Column(nullable = false, length = 16)
     private String targetType;
+
+    @Column(length = 64)
+    private String targetId;
 
     @Column(nullable = false, length = 128)
     private String title;

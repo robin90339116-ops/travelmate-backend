@@ -1,87 +1,92 @@
-# TravelMate Backend · AI 旅游导游后端(Spring Boot）
+# TravelMate Backend
 
-一款「边走边听」AI 旅游导游 App 的服务端。基于 **Spring Boot 3 + Java 17**,提供 AI 讲解/问答/视觉多模态、异步讲解生成、多人同游实时同步、账号鉴权与地图检索能力。
+面向 City Walk 的 Java AI 应用后端。Java 17 / Spring Boot 3.3.5，提供目录、AI讲解与问答、受约束路线规划、图片理解、异步任务、同游、账号与收藏接口。
 
-> 客户端为 HarmonyOS/ArkTS(独立仓库）。本仓库是完整、可独立运行的后端工程。
+本仓库是服务端，不包含可安装的手机客户端。原鸿蒙客户端采用不同接口及WebSocket协议，需要按本仓库契约适配。
 
-## ✨ 后端能力亮点
+## 本地启动
 
-| 能力 | 实现 |
-|---|---|
-| **JWT 鉴权** | HMAC 签名的 access/refresh 双令牌,**refresh token 轮换**,设备会话管理,单设备踢下线 / 全端退出 |
-| **Redis 缓存** | 热点目录读走缓存;`@Cacheable(sync=true)` 防**击穿**、缓存空值防**穿透**、随机 TTL 防**雪崩** |
-| **异步 + 消息队列** | AI 讲解生成异步化:dev 走线程池、prod 走 **RabbitMQ**(死信队列 + 重试),经 **SSE** 向客户端推送进度 |
-| **实时同步** | **WebSocket(STOMP)** 房间广播;`app.realtime.redis=true` 时经 **Redis Pub/Sub** 跨实例扇出 |
-| **AI 多模态** | 接入通义千问(百炼,OpenAI 兼容)文本 + 视觉;system prompt + availableFacts 白名单**抑制幻觉** |
-| **数据层** | Spring Data JPA;dev 用 H2、prod 用 MySQL;实体带索引,启动种子三城 City Walk 数据 |
-| **地图** | 高德 Web 服务 POI 搜索 |
-| **工程化** | 统一响应/全局异常、Bean 校验、JUnit 测试、Maven Wrapper、Docker Compose |
-
-## 🚀 快速开始(零外部依赖)
-
-dev 默认使用内存 H2、本地线程池异步、本地缓存,**无需数据库/Redis/MQ** 即可启动:
-
-```bash
+```sh
+./mvnw verify
 ./mvnw spring-boot:run
 ```
 
-启动后 `http://localhost:8787`。示例:
+默认端口8787，开发模式使用H2内存数据库，重启清空数据。需保留演示数据时：
 
-```bash
-# 健康检查
-curl http://localhost:8787/api/health
-# 城市(种子数据)
-curl http://localhost:8787/api/catalog/cities
-# 登录(开发验证码 246810),拿到 accessToken
-curl -X POST http://localhost:8787/api/auth/login \
-  -H 'Content-Type: application/json' \
-  -d '{"phone":"13800000000","code":"246810","deviceName":"demo"}'
-# 用 accessToken 创建同游房间
-curl -X POST http://localhost:8787/api/teams \
-  -H "Authorization: Bearer <accessToken>" -H 'Content-Type: application/json' -d '{"routeId":"route-beijing-axis"}'
+```sh
+./mvnw spring-boot:run -Dspring-boot.run.profiles=local
 ```
 
-## 🏭 生产模式(MySQL + Redis + RabbitMQ）
+`local` 使用 `./data/travelmate` 文件数据库。测试务必使用独立数据库，不要指向现有账号数据。
 
-```bash
-docker compose up -d           # 起 MySQL / Redis / RabbitMQ
-./mvnw spring-boot:run -Dspring-boot.run.profiles=prod,redis,mq
-```
+## 账号
 
-`prod` 切 MySQL 与 Redis 缓存,`redis` 开启跨实例广播,`mq` 启用 RabbitMQ 异步管线。真实 AI/地图能力需在 `.env` 配置 `DASHSCOPE_API_KEY`、`AMAP_WEB_KEY`(见 `.env.example`)。
+- `POST /api/auth/register` 和 `/api/auth/password/login`：`{"phone":"13800000000","password":"至少12字符的密码","deviceName":"demo"}`。此处phone仅作为登录标识，注册不证明号码所有权。
+- 开发专用：`POST /api/auth/login`，传phone、code（默认246810）、deviceName。生产模式禁用该入口，未集成正式短信发送。
+- 返回统一结构：`{"code":0,"message":"ok","data":...}`，data含accessToken、refreshToken、sessionId。
+- 私有接口使用 `Authorization: Bearer <accessToken>`。刷新令牌使用SHA-256摘要保存，数据库行锁保证同一个旧令牌仅能刷新一次。
+- `POST /api/auth/refresh` 接收refreshToken；`POST /api/auth/logout` 可不传正文，撤销当前设备；`POST /api/auth/logout-all` 撤销全部设备。访问令牌每次请求均校验会话有效性。
+- `GET /api/auth/sessions`、`DELETE /api/auth/sessions/{sessionId}` 管理设备。
+- 密码采用SHA-256预摘要后BCrypt保存，不记录明文；与高熵刷新令牌采用不同存储方式。
 
-## 📚 主要接口
+## AI主流程
 
-| 模块 | 端点 |
-|---|---|
-| 认证 | `POST /api/auth/sms/code` · `POST /api/auth/login` · `POST /api/auth/refresh` · `POST /api/auth/logout` · `POST /api/auth/logout-all` · `GET /api/auth/sessions` · `DELETE /api/auth/sessions/{id}` |
-| 目录 | `GET /api/catalog/cities` · `.../cities/{cityKey}/spots` · `.../cities/{cityKey}/routes` · `.../routes/{routeKey}` |
-| AI | `POST /api/ai/explanations` · `/chat` · `/vision` · `POST /api/ai/explanations/async` · `GET /api/ai/jobs/{jobId}/stream`(SSE) |
-| 同游 | `POST /api/teams` · `/join` · `GET /{id}` · `/{id}/playback` · `/{id}/leave` · `DELETE /{id}/members/{userId}` · `POST /{id}/transfer/{userId}` |
-| 实时 | STOMP `ws://.../ws`,订阅 `/topic/teams/{teamId}`,发送 `/app/teams/{teamId}/playback` |
-| 收藏 | `GET/POST /api/favorites` · `DELETE /api/favorites/{id}` |
-| 地图 | `POST /api/map/search` |
-| 运维 | `GET /api/health` · `GET /api/config/status` |
+1. `GET /api/catalog/cities`，`GET /api/catalog/cities/{cityKey}/spots` 获取景点资料和数字字符串ID。
+2. `POST /api/ai/explanations`：`{"spotId":"1","style":"story","routeContext":"..."}`。
+3. `POST /api/ai/chat`：`{"spotId":"1","question":"这里有什么值得观察的？"}`。
+4. `POST /api/routes/generate`：`{"cityKey":"beijing","durationHours":2,"interests":"建筑"}`。模型仅选候选景点，服务端验证ID、去重和非空；返回建议次序，不保证导航时长或开放时间。
+5. `POST /api/ai/vision`：spotId、mode、mediaUrl（HTTPS地址或data:image）、question。外部模型须支持对应图片/视频格式；不包含摄像头采集或实时视频流。
 
-## 🧱 技术栈
+AI配置通过进程环境变量传入：`DASHSCOPE_API_KEY`、`AI_BASE_URL`、`AI_TEXT_MODEL`、`AI_VISION_MODEL`、`AI_PROVIDER`。请求采用兼容chat/completions协议。更换供应商时必须同时设置URL、模型及凭证；更改provider名称本身不会自动切换服务。
 
-Java 17 · Spring Boot 3.3 · Spring Web · Spring Security · Spring Data JPA · Spring Data Redis · Spring AMQP(RabbitMQ)· Spring WebSocket(STOMP)· MySQL / H2 · JJWT · Lombok · JUnit 5 · Maven · Docker Compose
+连接超时5秒，读取超时30秒，429/5xx最多3次请求，其他错误不盲目重试。输入限长，AI写请求按账号限流；该限流为单实例实现，多实例需入口共享配额。
 
-## 🗂 架构分层
+讲解携带景点资料与待核实状态，提示词要求基于资料回答。**提示词不是事实正确性的保证**，尚无真实模型幻觉率评测。种子景点一律标记为演示资料，不能当作已核实的开放时间。
 
-```
-controller  →  service  →  repository(JPA)  →  MySQL/H2
-                   │
-                   ├─ QwenClient        (通义千问多模态)
-                   ├─ Redis Cache       (穿透/击穿/雪崩)
-                   ├─ RabbitMQ + SSE    (异步讲解 + 进度)
-                   └─ STOMP + Redis PubSub (多人实时同步)
-```
+## 异步任务
 
-## 🧪 测试
+- `POST /api/ai/explanations/async` 提交，返回jobId和streamUrl。
+- `GET /api/ai/jobs/{jobId}` 查询持久化状态；`GET /api/ai/jobs/{jobId}/stream` 接收SSE；`DELETE /api/ai/jobs/{jobId}` 取消。
+- 状态：queued → running → completed / failed / cancelled。SSE的progress/result事件携带状态及结果；百分比不伪装为模型真实进度。
+- 任务归属当前用户，其他账号返回404。SSE请求必须携带Authorization；浏览器原生EventSource不能直接自定义此请求头，请用支持流读取的fetch客户端。
+- 任务保存在数据库；订阅实例轮询数据库，支持晚订阅和跨实例查询。工作进程失联的任务5分钟后标记失败，不静默重新调用收费接口。客户端可显式重新提交。
+- 取消阻止保存完成结果，不保证已经发往供应商的请求停止计费。
+- RabbitMQ失败任务保存失败状态并拒绝入死信队列；不宣称具备自动死信重放。消费者通过数据库原子claim避免重复执行已领取任务。
 
-```bash
-./mvnw test
-```
+## 同游
 
-包含上下文装配测试与 JWT 轮换/签名单元测试。
+`POST /api/teams`创建，`POST /api/teams/join`邀请码加入；房间详情、播放、踢人、转让和退出路径见控制器。非成员不能读取房间。队长退出自动交给最早加入的其他成员；最后一人退出删除房间。
+
+STOMP连接 `/ws`，在CONNECT原生头中设置 `Authorization:Bearer ...`。订阅 `/topic/teams/{id}`，向 `/app/teams/{id}/playback` 发送播放消息。身份来自验证后的会话，客户端userId字段无授权作用。连接、发送、订阅及下发时检查身份/成员资格；事务提交后广播，避免失败事务产生假事件。
+
+共享追问：`POST /api/teams/{id}/questions`传spotId、question；`GET`同路径返回团队问题及生成状态、答案；`DELETE /{jobId}`允许提问者取消。当前为并发异步任务列表，不承诺严格优先级队列或音频同步。
+
+## 地图、语音与个人数据
+
+- 高德搜索 `POST /api/map/search`：keyword、city。步行路线 `POST /api/map/route-validate`：origin、destination，格式经度,纬度。需要AMAP_WEB_KEY。
+- NLS合成 `POST /api/tts`：text（1~300字），返回MP3 Base64、mimeType、sampleRate。
+- NLS识别 `POST /api/asr`：audioBase64、format（pcm/wav），16kHz单声道，最多约60秒。需要ALIYUN_NLS_APP_KEY、ALIYUN_NLS_ACCESS_TOKEN。令牌需按供应商有效期更新，未实现自动获取/续期。
+- 原始媒体不在本服务写盘；供应商留存策略需独立确认，不宣称第三方已删除。
+- 收藏：`GET/POST /api/favorites`、`DELETE /api/favorites/{id}`。
+- 数据：`GET /api/data/export`、`DELETE /api/data/records`、`DELETE /api/data/account`。注销清理本服务用户数据并撤销会话。
+
+## 基础设施与部署边界
+
+开发环境基础设施见docker-compose.yml。设置环境变量后以prod,mq,redis启动，生产必须提供32字节以上JWT_SECRET；固定开发验证码和H2控制台在prod禁用。不要直接将开发容器的默认密码用于公网部署。
+
+`.env`不会被Spring Boot自动加载。应由终端、IDE运行配置或部署系统注入环境变量。
+
+Redis使用带类型信息的受限序列化、每次写入独立TTL抖动。未实现分布式回源锁，不宣称sync=true保证跨实例防击穿。Redis属于运行依赖，生产应配健康检查与告警。
+
+当前数据库使用Hibernate update便于原型迭代；正式承载用户前还应建立版本化迁移、备份恢复、TLS/网关、监控及密钥管理。这不是生产上线认证。
+
+## 验证与求职展示
+
+`./mvnw verify`运行JWT、业务权限、并发刷新、任务状态、Redis序列化及AI/语音HTTP契约测试。
+AI/语音成功响应在测试中使用受控替身，不等同真实云服务联调；模型质量、费用和时延需要真实调用评测。
+
+可展示：基于问题复现修复令牌轮换和越权，数据库持久化AI任务，结构化路线结果校验，鉴权实时通信，供应商异常契约测试，以及AI辅助开发后的人工验收过程。不要写未经测量的QPS、留存率或零幻觉承诺。
+
+接口参考：
+- 阿里云语音合成：https://help.aliyun.com/zh/isi/developer-reference/restful-api-3
+- 阿里云短句识别：https://www.alibabacloud.com/help/en/isi/developer-reference/restful-api-2

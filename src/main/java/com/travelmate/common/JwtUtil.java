@@ -28,9 +28,7 @@ public class JwtUtil {
         byte[] bytes = secret.getBytes(StandardCharsets.UTF_8);
         if (bytes.length < 32) {
             // HS256 要求至少 256bit 密钥,不足时右补零,保证开发环境可用。
-            byte[] padded = new byte[32];
-            System.arraycopy(bytes, 0, padded, 0, bytes.length);
-            bytes = padded;
+            throw new IllegalArgumentException("JWT secret must contain at least 32 bytes");
         }
         this.key = Keys.hmacShaKeyFor(bytes);
         this.accessTtlSeconds = accessTtlSeconds;
@@ -39,6 +37,10 @@ public class JwtUtil {
 
     public String issueAccessToken(Long userId, String username) {
         return build(userId, username, "access", accessTtlSeconds, null);
+    }
+
+    public String issueAccessToken(Long userId, String username, String sessionId) {
+        return build(userId, username, "access", accessTtlSeconds, sessionId);
     }
 
     /** refresh token 绑定 sessionId,用于轮换与撤销。 */

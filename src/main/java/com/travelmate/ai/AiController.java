@@ -15,7 +15,7 @@ public class AiController {
     private final AiAsyncGuideService asyncGuideService;
 
     @PostMapping("/explanations")
-    public Result<ExplanationResponse> explanation(@RequestBody ExplanationRequest request) {
+    public Result<ExplanationResponse> explanation(@jakarta.validation.Valid @RequestBody ExplanationRequest request) {
         return Result.ok(aiService.explanation(request));
     }
 
@@ -31,13 +31,22 @@ public class AiController {
 
     /** 提交异步讲解生成任务,返回 jobId 与 SSE 订阅地址。 */
     @PostMapping("/explanations/async")
-    public Result<GuideJobResponse> submitAsync(@RequestBody ExplanationRequest request) {
+    public Result<GuideJobResponse> submitAsync(@jakarta.validation.Valid @RequestBody ExplanationRequest request) {
         return Result.ok(asyncGuideService.submit(request));
     }
 
     /** 订阅任务进度(Server-Sent Events)。 */
     @GetMapping("/jobs/{jobId}/stream")
-    public SseEmitter stream(@PathVariable String jobId) {
-        return asyncGuideService.subscribe(jobId);
+    public SseEmitter stream(@PathVariable String jobId, @RequestHeader("Authorization") String authorization) {
+        return asyncGuideService.subscribe(jobId, authorization);
+    }
+
+    @GetMapping("/jobs/{jobId}")
+    public Result<AiAsyncGuideService.JobView> status(@PathVariable String jobId) {
+        return Result.ok(asyncGuideService.status(jobId));
+    }
+    @DeleteMapping("/jobs/{jobId}")
+    public Result<Void> cancel(@PathVariable String jobId) {
+        asyncGuideService.cancel(jobId);return Result.ok();
     }
 }

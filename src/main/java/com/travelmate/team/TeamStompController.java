@@ -9,7 +9,7 @@ import org.springframework.stereotype.Controller;
 
 /**
  * STOMP 入站:客户端发送到 /app/teams/{teamId}/playback,服务端更新并广播。
- * 说明:握手鉴权可结合 STOMP CONNECT 头的 JWT 校验(此处演示 userId 由消息携带)。
+ * CONNECT会话及房间权限由StompSecurity校验，身份仅来自Principal。
  */
 @Controller
 @RequiredArgsConstructor
@@ -21,8 +21,8 @@ public class TeamStompController {
     }
 
     @MessageMapping("/teams/{teamId}/playback")
-    public void playback(@DestinationVariable Long teamId, @Payload StompPlayback payload) {
-        teamService.updatePlayback(payload.userId(), teamId,
+    public void playback(@DestinationVariable Long teamId, @Payload StompPlayback payload, java.security.Principal principal) {
+        teamService.updatePlayback(Long.valueOf(principal.getName()), teamId,
                 new PlaybackRequest(payload.currentPointId(), payload.playbackStatus()));
     }
 }

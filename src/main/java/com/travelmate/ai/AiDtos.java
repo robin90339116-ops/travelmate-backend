@@ -7,7 +7,9 @@ public final class AiDtos {
     private AiDtos() {
     }
 
-    public record ExplanationRequest(String spotId, String style, String routeContext) {
+    public record ExplanationRequest(@jakarta.validation.constraints.NotBlank String spotId,
+            @jakarta.validation.constraints.Size(max=32) String style,
+            @jakarta.validation.constraints.Size(max=4000) String routeContext) {
     }
 
     public record ExplanationResponse(

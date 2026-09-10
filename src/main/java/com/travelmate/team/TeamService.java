@@ -58,6 +58,7 @@ public class TeamService {
     }
 
     public TeamView getTeam(Long teamId) {
+        requireMember(teamId, com.travelmate.common.CurrentUser.id());
         Team team = requireTeam(teamId);
         return toView(team);
     }
@@ -65,6 +66,21 @@ public class TeamService {
     @Transactional
     public void leave(Long userId, Long teamId) {
         Team team = requireTeam(teamId);
+        requireMember(teamId, userId);
+        if (team.getOwnerId().equals(userId)) {
+            var others = memberRepository.findByTeamIdOrderByJoinedAtAsc(teamId).stream()
+                    .filter(m -> !m.getUserId().equals(userId)).toList();
+            if (others.isEmpty()) {
+                memberRepository.findByTeamIdAndUserId(teamId, userId).ifPresent(memberRepository::delete);
+                teamRepository.delete(team);
+                return;
+            }
+            var next = others.get(0);
+            next.setRole("owner");
+            team.setOwnerId(next.getUserId());
+            memberRepository.save(next);
+            teamRepository.save(team);
+        }
         memberRepository.findByTeamIdAndUserId(teamId, userId)
                 .ifPresent(memberRepository::delete);
         broadcaster.broadcast(team.getId(), "members:update", toView(team).members());
@@ -101,6 +117,9 @@ public class TeamService {
 
     @Transactional
     public TeamView updatePlayback(Long userId, Long teamId, PlaybackRequest request) {
+        if (request == null || (request.playbackStatus() != null &&
+                !java.util.Set.of("playing", "paused", "stopped").contains(request.playbackStatus())))
+            throw ApiException.badRequest("播放状态必须是playing、paused或stopped");
         Team team = requireTeam(teamId);
         requireMember(teamId, userId);
         if (request.currentPointId() != null) {
@@ -137,7 +156,7 @@ public class TeamService {
         return team;
     }
 
-    private void requireMember(Long teamId, Long userId) {
+    public void requireMember(Long teamId, Long userId) {
         memberRepository.findByTeamIdAndUserId(teamId, userId)
                 .orElseThrow(() -> ApiException.forbidden("你不在该房间内"));
     }

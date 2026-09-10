@@ -15,9 +15,8 @@ import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * Redis 缓存管理器(仅 redis/prod profile)。
- * - 缓存空值:防缓存穿透(空结果也写入,短 TTL)。
- * - 每个缓存随机基础 TTL:防缓存雪崩(避免同一时刻集中失效)。
- * - 击穿由 @Cacheable(sync=true) 在应用层控制并发回源。
+ * 空值短TTL，每次写入独立TTL抖动。抛异常的查询不生成空值缓存。
+ * 不提供分布式回源锁。
  */
 @Configuration
 @Profile({"redis", "prod"})
@@ -25,10 +24,14 @@ public class RedisCacheConfig {
 
     @Bean
     public RedisCacheManager cacheManager(RedisConnectionFactory factory, ObjectMapper objectMapper) {
-        GenericJackson2JsonRedisSerializer serializer = new GenericJackson2JsonRedisSerializer(objectMapper);
-        Duration randomBase = Duration.ofMinutes(10).plusSeconds(ThreadLocalRandom.current().nextInt(0, 300));
+        var mapper = objectMapper.copy();
+        mapper.activateDefaultTyping(com.fasterxml.jackson.databind.jsontype.BasicPolymorphicTypeValidator.builder()
+                .allowIfSubType("com.travelmate.catalog.").allowIfSubType("java.util.").allowIfSubType("java.lang.")
+                .build(), ObjectMapper.DefaultTyping.EVERYTHING, com.fasterxml.jackson.annotation.JsonTypeInfo.As.PROPERTY);
+        GenericJackson2JsonRedisSerializer serializer = new GenericJackson2JsonRedisSerializer(mapper);
         RedisCacheConfiguration config = RedisCacheConfiguration.defaultCacheConfig()
-                .entryTtl(randomBase)
+                .entryTtl((key, value) -> value == null ? Duration.ofSeconds(30)
+                        : Duration.ofSeconds(600 + ThreadLocalRandom.current().nextInt(300)))
                 .serializeValuesWith(RedisSerializationContext.SerializationPair.fromSerializer(serializer));
         return RedisCacheManager.builder(factory)
                 .cacheDefaults(config)
